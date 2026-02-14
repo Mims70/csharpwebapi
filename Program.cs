@@ -3,15 +3,17 @@ using MyFirstAPI.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add services to the container.
+builder.Services.AddControllers();
 
-builder.Services.AddControllers();  
-builder.Services.AddOpenApi();
+// Database configuration - supports both SQLite (local) and PostgreSQL (production)
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
+    ?? Environment.GetEnvironmentVariable("DATABASE_URL")
     ?? "Data Source=products.db";
 
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
-    if (connectionString.Contains("Host="))
+    if (connectionString.StartsWith("postgres"))
     {
         options.UseNpgsql(connectionString);
     }
@@ -20,16 +22,16 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         options.UseSqlite(connectionString);
     }
 });
+
 var app = builder.Build();
 
-
-if (app.Environment.IsDevelopment())
+// Auto-run migrations on startup (for production)
+using (var scope = app.Services.CreateScope())
 {
-    app.MapOpenApi();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
 }
 
 app.UseHttpsRedirection();
-
-app.MapControllers();  
-
+app.MapControllers();
 app.Run();
